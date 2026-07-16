@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Anki Reader – Frage Antwort Notiz</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#16181c;--muted:#68707d;--line:#d9dde4;--accent:#2563eb;--soft:#dbe8ff;--ok:#17803d;--bad:#b42318}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#191c22;--text:#f5f7fa;--muted:#a5acb8;--line:#343943;--accent:#7aa2ff;--soft:#203052;--ok:#54c878;--bad:#ff8278}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:920px;margin:auto;padding:16px}h1{font-size:27px;margin:0 0 5px}.sub{color:var(--muted);margin:0 0 14px}
+.panel,.note{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.drop{border:2px dashed var(--line);border-radius:14px;padding:24px 14px;text-align:center}.drop.active{border-color:var(--accent);background:var(--soft)}
+button,.filebtn,input,select{font:inherit;border:1px solid var(--line);border-radius:11px;background:var(--card);color:var(--text)}
+button,.filebtn{padding:10px 13px;cursor:pointer;display:inline-block}.primary{background:var(--accent);border-color:var(--accent);color:white;font-weight:650}
+input,select{width:100%;padding:11px 12px}input[type=file]{display:none}.progressWrap{margin-top:14px}
+.progressTop{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.percent{font-size:30px;font-weight:800;color:var(--accent)}
+.stage{font-weight:700}.track{height:13px;background:var(--line);border-radius:999px;overflow:hidden;margin-top:8px}
+.bar{height:100%;width:0;background:var(--accent);transition:width .18s}.log{margin-top:10px;color:var(--muted);white-space:pre-wrap;font-size:14px;line-height:1.45}
+.error{color:var(--bad);font-weight:650}.ok{color:var(--ok);font-weight:650}.grid{display:grid;grid-template-columns:1fr 230px;gap:9px}
+@media(max-width:650px){.grid{grid-template-columns:1fr}}.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.small{font-size:13px;color:var(--muted)}.meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.chip{font-size:12px;background:var(--soft);padding:4px 8px;border-radius:999px}
+.field{padding-top:11px;margin-top:11px;border-top:1px solid var(--line);overflow-wrap:anywhere}.field:first-of-type{border-top:0;margin-top:0;padding-top:0}
+.label{font-size:12px;color:var(--muted);font-weight:750;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+.content img,.content video{max-width:100%;height:auto;border-radius:8px}.content table{display:block;max-width:100%;overflow:auto}.hiddenAnswer .content{display:none}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:12px 0}mark{background:#ffe58a;color:#111;border-radius:3px}
+.diag{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--bg);padding:10px;border-radius:10px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<main>
+<h1>Anki Reader</h1>
+<p class="sub">Zeigt nur Frage, Antwort und Notiz – ohne Tags, Decknamen oder sonstige Felder.</p>
+
+<section class="panel">
+  <div id="drop" class="drop">
+    <div style="font-size:19px;font-weight:750;margin-bottom:7px">Anki-Datei auswählen</div>
+    <div class="small" style="margin-bottom:13px">Die Datei bleibt lokal auf deinem Gerät.</div>
+    <label class="filebtn primary" for="file">.apkg öffnen</label>
+    <input id="file" type="file" accept=".apkg,.colpkg,application/zip">
+  </div>
+  <div class="progressWrap">
+    <div class="progressTop">
+      <div><div id="stage" class="stage">Systemprüfung</div><div id="detail" class="small">Bibliotheken werden geprüft.</div></div>
+      <div id="percent" class="percent">0%</div>
+    </div>
+    <div class="track"><div id="bar" class="bar"></div></div>
+    <div id="log" class="log">Bitte kurz warten …</div>
+  </div>
+  <details style="margin-top:10px">
+    <summary class="small">Technische Diagnose</summary>
+    <div id="diag" class="diag"></div>
+  </details>
+</section>
+
+<section id="controls" class="panel" hidden>
+  <input id="search" type="search" placeholder="Frage, Antwort oder Notiz durchsuchen …">
+  <div class="toolbar">
+    <button id="answers" type="button">Antworten ausblenden</button>
+    <button id="copyBlock" type="button">Alles als Textblock</button>
+    <button id="txt" type="button">Treffer als TXT</button>
+    <button id="again" type="button">Andere Datei</button>
+    <span id="count" class="small"></span>
+  </div>
+</section>
+
+<div id="pager1" class="pager" hidden><button class="prev">← Zurück</button><span class="page small"></span><button class="next">Weiter →</button></div>
+
+<div id="copyPanel" class="panel" hidden>
+<h3 style="margin-top:0">Textblock (einfach kopieren)</h3>
+<textarea id="allText" style="width:100%;height:350px;padding:12px;font:15px ui-monospace,monospace;border-radius:10px;border:1px solid #bbb"></textarea>
+<div style="margin-top:10px">
+<button id="copyText" type="button">📋 Alles kopieren</button>
+</div>
+</div>
+
+<section id="notes"></section>
+<div id="pager2" class="pager" hidden><button class="prev">← Zurück</button><span class="page small"></span><button class="next">Weiter →</button></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sql.js@1.13.0/dist/sql-asm.js"></script>
+<script type="module">
+import {decompress} from "https://cdn.jsdelivr.net/npm/fzstd@0.1.1/+esm";
+window.__ankiZstd = decompress;
+window.dispatchEvent(new Event("anki-zstd-ready"));
+</script>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
+const S={notes:[],filtered:[],media:new Map(),page:1,size:20,hide:false,file:"",diag:[]};
+const E={file:$("#file"),drop:$("#drop"),stage:$("#stage"),detail:$("#detail"),percent:$("#percent"),bar:$("#bar"),log:$("#log"),diag:$("#diag"),controls:$("#controls"),search:$("#search"),notes:$("#notes"),count:$("#count")};
+
+function addDiag(x){S.diag.push(x);E.diag.textContent=S.diag.join("\n")}
+function setProgress(p,stage,detail){p=Math.max(0,Math.min(100,Math.round(p)));E.percent.textContent=p+"%";E.bar.style.width=p+"%";if(stage)E.stage.textContent=stage;if(detail)E.detail.textContent=detail}
+function setLog(x,kind=""){E.log.textContent=x;E.log.className="log "+kind}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+function plain(h){const d=document.createElement("div");d.innerHTML=h||"";return(d.textContent||"").replace(/\s+/g," ").trim()}
+function wantedFields(fields){
+ const groups=[
+  {label:"Frage", keys:["frage","question","front","vorderseite","prompt","text"]},
+  {label:"Antwort", keys:["antwort","answer","back","rückseite","ruckseite"]},
+  {label:"Notiz", keys:["notiz","note","notes","extra","zusatz","erklärung","erklarung","hinweis","kommentar"]}
+ ];
+ const picked=[],used=new Set();
+ for(const group of groups){
+  const hit=fields.find((f,i)=>{
+   const n=String(f.name||"").trim().toLowerCase();
+   return !used.has(i) && group.keys.some(k=>n===k || n.includes(k));
+  });
+  if(hit){
+   const i=fields.indexOf(hit);used.add(i);
+   if(plain(hit.html)) picked.push({name:group.label,html:hit.html});
+  }
+ }
+ // Fallback for unusual note types: first non-empty field = question,
+ // second = answer, third = note. Still never show more than 3 fields.
+ if(!picked.length){
+  const nonEmpty=fields.filter(f=>plain(f.html)).slice(0,3);
+  const labels=["Frage","Antwort","Notiz"];
+  return nonEmpty.map((f,i)=>({name:labels[i],html:f.html}));
+ }
+ return picked.slice(0,3);
+}
+function isSQLite(u){return new TextDecoder().decode(u.slice(0,16)).startsWith("SQLite format 3")}
+function waitFor(label,test,timeout=20000){return new Promise((resolve,reject)=>{if(test())return resolve();const start=Date.now(),t=setInterval(()=>{if(test()){clearInterval(t);resolve()}else if(Date.now()-start>timeout){clearInterval(t);reject(new Error(label+" konnte nicht geladen werden. Internet einschalten, Seite neu öffnen und erneut versuchen."))}},100)})}
+
+async function check(){
+ S.diag=[];addDiag("Browser: "+navigator.userAgent);addDiag("Online: "+navigator.onLine);
+ try{
+  setProgress(2,"Systemprüfung","JSZip wird geprüft");await waitFor("JSZip",()=>!!window.JSZip);addDiag("JSZip: OK");
+  setProgress(5,"Systemprüfung","SQLite-Modul wird geprüft");await waitFor("sql.js",()=>typeof window.initSqlJs==="function");addDiag("sql.js ASM: OK");
+  setProgress(8,"Systemprüfung","Zstandard-Modul wird geprüft");await waitFor("Zstandard",()=>typeof window.__ankiZstd==="function");addDiag("Zstandard: OK");
+  setProgress(0,"Bereit","Wähle eine .apkg-Datei.");setLog("System bereit. Beim ersten Öffnen muss Internet aktiv sein.","ok");
+ }catch(e){addDiag("FEHLER: "+e.message);setProgress(0,"Systemfehler","Bibliothek fehlt");setLog(e.message,"error")}
+}
+
+function readFile(file){
+ return new Promise((resolve,reject)=>{
+  const r=new FileReader();
+  r.onprogress=e=>{if(e.lengthComputable){const f=e.loaded/e.total;setProgress(3+f*12,"Datei wird gelesen",`${(e.loaded/1048576).toFixed(1)} / ${(e.total/1048576).toFixed(1)} MB`)}};
+  r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error||new Error("Datei konnte nicht gelesen werden."));r.readAsArrayBuffer(file)
+ })
+}
+
+async function openAnki(file){
+ try{
+  S.file=file.name;S.notes=[];S.filtered=[];S.media.forEach(URL.revokeObjectURL);S.media.clear();S.diag=[];E.diag.textContent="";
+  addDiag("Datei: "+file.name);addDiag("Größe: "+(file.size/1048576).toFixed(2)+" MB");
+  setLog("Verarbeitung gestartet …");setProgress(1,"Start",file.name);
+  await waitFor("JSZip",()=>!!window.JSZip);await waitFor("sql.js",()=>typeof window.initSqlJs==="function");await waitFor("Zstandard",()=>typeof window.__ankiZstd==="function");
+  const buffer=await readFile(file);
+
+  setProgress(17,"Paket wird geöffnet","ZIP-Struktur wird gelesen");
+  const zip=await JSZip.loadAsync(buffer);const names=Object.keys(zip.files);addDiag("ZIP-Einträge: "+names.length);
+  const dbName=["collection.anki21b","collection.anki21","collection.anki2"].find(n=>zip.file(n));
+  if(!dbName)throw new Error("Keine Anki-Datenbank gefunden.");
+  addDiag("Datenbank: "+dbName);setProgress(24,"Datenbank gefunden",dbName);
+
+  let bytes=new Uint8Array(await zip.file(dbName).async("arraybuffer",m=>setProgress(24+m.percent*.11,"Datenbank wird extrahiert",Math.round(m.percent)+"%")));
+  addDiag("Interne DB-Größe: "+bytes.length+" Bytes");
+
+  if(!isSQLite(bytes)){
+   setProgress(38,"Moderne Anki-Kompression","Zstandard wird entpackt");await sleep(50);
+   bytes=window.__ankiZstd(bytes);addDiag("Entpackte DB-Größe: "+bytes.length+" Bytes")
+  }
+  if(!isSQLite(bytes))throw new Error("Die interne Datenbank ist kein gültiges SQLite-Format.");
+
+  setProgress(49,"SQLite wird gestartet","Datenbank wird geöffnet");
+  const SQL=await initSqlJs();const db=new SQL.Database(bytes);addDiag("SQLite: geöffnet");
+
+  setProgress(57,"Metadaten","Decks und Notiztypen werden gelesen");
+  const col=db.exec("SELECT decks, models FROM col LIMIT 1");if(!col.length)throw new Error("Anki-Metadaten fehlen.");
+  const decks=JSON.parse(col[0].values[0][0]||"{}"),models=JSON.parse(col[0].values[0][1]||"{}"),deckNames={};
+  Object.entries(decks).forEach(([id,d])=>deckNames[id]=d.name||("Deck "+id));
+
+  setProgress(64,"Karten werden gelesen","Notizen werden aus SQLite geladen");
+  const res=db.exec("SELECT n.id,n.mid,n.tags,n.flds,n.sfld,GROUP_CONCAT(DISTINCT c.did) FROM notes n LEFT JOIN cards c ON c.nid=n.id GROUP BY n.id ORDER BY n.id");
+  if(!res.length)throw new Error("Keine Notizen gefunden.");
+  const rows=res[0].values,total=rows.length;addDiag("Notizen: "+total);
+
+  for(let start=0;start<total;start+=250){
+   const end=Math.min(total,start+250);
+   for(let i=start;i<end;i++){
+    const [id,mid,tags,flds,sfld,dids]=rows[i],model=models[String(mid)]||{},defs=model.flds||[],vals=String(flds||"").split("\x1f");
+    const allFields=vals.map((v,j)=>({name:(defs[j]&&defs[j].name)||("Feld "+(j+1)),html:v||""}));
+    const fields=wantedFields(allFields);
+    S.notes.push({id,fields,text:fields.map(f=>plain(f.html)).join(" ").toLowerCase()})
+   }
+   setProgress(65+(end/total)*17,"Karten werden verarbeitet",`${end} / ${total}`);await sleep(0)
+  }
+
+  setProgress(83,"Medien","Bilder und Audiodateien werden vorbereitet");await loadMedia(zip);
+  db.close();setProgress(95,"Ansicht","Kartenansicht wird aufgebaut");
+  S.filtered=S.notes.slice();S.page=1;E.controls.hidden=false;$("#pager1").hidden=false;$("#pager2").hidden=false;render();
+  setProgress(100,"Fertig",`${S.notes.length.toLocaleString("de-DE")} Notizen geladen`);
+  setLog(`Erfolgreich geladen: ${S.notes.length.toLocaleString("de-DE")} Notizen und ${S.media.size} Mediendateien.`,"ok")
+ }catch(e){
+  console.error(e);addDiag("FEHLER: "+(e.stack||e.message||e));setProgress(0,"Fehler","Verarbeitung abgebrochen");
+  setLog((e.message||String(e))+"\n\nÖffne die technische Diagnose und schicke mir den Text, falls es wieder scheitert.","error")
+ }
+}
+
+async function loadMedia(zip){
+ const mf=zip.file("media");if(!mf){addDiag("Medien-Mapping: fehlt");return}
+ let map;try{map=JSON.parse(await mf.async("text"))}catch(e){addDiag("Medien-Mapping: ungültig");return}
+ const entries=Object.entries(map),total=entries.length;addDiag("Medien: "+total);
+ for(let i=0;i<total;i++){
+  const [arc,name]=entries[i],f=zip.file(arc);if(f){const blob=await f.async("blob");S.media.set(name,URL.createObjectURL(blob))}
+  if(i%10===0){setProgress(83+(i/Math.max(1,total))*11,"Medien",`${i} / ${total}`);await sleep(0)}
+ }
+}
+function replaceMedia(root){root.querySelectorAll("[src]").forEach(x=>{const n=decodeURIComponent((x.getAttribute("src")||"").split("/").pop());if(S.media.has(n))x.src=S.media.get(n)});root.querySelectorAll("a[href]").forEach(x=>{const n=decodeURIComponent((x.getAttribute("href")||"").split("/").pop());if(S.media.has(n))x.href=S.media.get(n)})}
+function highlight(root,q){if(!q)return;const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT),a=[];while(w.nextNode())a.push(w.currentNode);const low=q.toLowerCase();for(const n of a){const t=n.nodeValue,i=t.toLowerCase().indexOf(low);if(i<0||n.parentElement.closest("script,style,mark"))continue;const f=document.createDocumentFragment();f.append(t.slice(0,i));const m=document.createElement("mark");m.textContent=t.slice(i,i+q.length);f.append(m,t.slice(i+q.length));n.replaceWith(f)}}
+function filter(){const q=E.search.value.trim().toLowerCase();S.filtered=S.notes.filter(n=>!q||n.text.includes(q));S.page=1;render()}
+function render(){
+ E.notes.innerHTML="";const pages=Math.max(1,Math.ceil(S.filtered.length/S.size));S.page=Math.min(S.page,pages);const start=(S.page-1)*S.size,items=S.filtered.slice(start,start+S.size),q=E.search.value.trim();
+ E.count.textContent=S.filtered.length.toLocaleString("de-DE")+" Treffer";$$(".page").forEach(x=>x.textContent=`Seite ${S.page} / ${pages}`);
+ for(const n of items){const a=document.createElement("article");a.className="note";
+ n.fields.forEach((f,i)=>{const s=document.createElement("section");s.className="field"+(S.hide&&i>0?" hiddenAnswer":"");const l=document.createElement("div");l.className="label";l.textContent=f.name;const c=document.createElement("div");c.className="content";c.innerHTML=f.html||"<em>Leer</em>";s.append(l,c);a.appendChild(s)});
+ replaceMedia(a);highlight(a,q);E.notes.appendChild(a)}if(!items.length)E.notes.innerHTML='<section class="panel"><b>Keine Treffer.</b></section>'
+}
+function page(d){const p=Math.max(1,Math.ceil(S.filtered.length/S.size));S.page=Math.max(1,Math.min(p,S.page+d));render();scrollTo({top:0,behavior:"smooth"})}
+function exportTxt(){const lines=[`Quelle: ${S.file}`,`Karten: ${S.filtered.length}`,""];S.filtered.forEach((n,i)=>{lines.push("=== "+(i+1)+" ===");n.fields.forEach(f=>lines.push(f.name+": "+plain(f.html)));lines.push("")});const b=new Blob([lines.join("\n")],{type:"text/plain;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=(S.file.replace(/\.(apkg|colpkg)$/i,"")||"anki")+"-frage-antwort-notiz.txt";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+E.file.addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)openAnki(f)});E.search.addEventListener("input",filter);
+$("#answers").addEventListener("click",function(){S.hide=!S.hide;this.textContent=S.hide?"Antworten anzeigen":"Antworten ausblenden";render()});$("#txt").addEventListener("click",exportTxt);$("#again").addEventListener("click",()=>E.file.click());
+$$(".prev").forEach(x=>x.addEventListener("click",()=>page(-1)));$$(".next").forEach(x=>x.addEventListener("click",()=>page(1)));
+["dragenter","dragover"].forEach(ev=>E.drop.addEventListener(ev,e=>{e.preventDefault();E.drop.classList.add("active")}));["dragleave","drop"].forEach(ev=>E.drop.addEventListener(ev,e=>{e.preventDefault();E.drop.classList.remove("active")}));
+E.drop.addEventListener("drop",e=>{const f=e.dataTransfer.files&&e.dataTransfer.files[0];if(f)openAnki(f)});addEventListener("online",check);check()
+
+function buildBlock(){
+ const ta=document.getElementById("allText");
+ const panel=document.getElementById("copyPanel");
+ let out="";
+ S.filtered.forEach((n,i)=>{
+   out+="### Karte "+(i+1)+"\n";
+   n.fields.forEach(f=>{
+      out+=f.name+":\n"+plain(f.html)+"\n\n";
+   });
+   out+="------------------------------\n\n";
+ });
+ ta.value=out.trim();
+ panel.hidden=false;
+ ta.focus();
+ ta.select();
+}
+document.getElementById("copyBlock").addEventListener("click",buildBlock);
+document.getElementById("copyText").addEventListener("click",async()=>{
+ const ta=document.getElementById("allText");
+ try{
+   await navigator.clipboard.writeText(ta.value);
+   alert("Alles kopiert!");
+ }catch(e){
+   ta.focus();ta.select();
+   alert("Drücke ⌘/Ctrl+C zum Kopieren.");
+ }
+});
+
+})();
+</script>
+</body>
+</html>
